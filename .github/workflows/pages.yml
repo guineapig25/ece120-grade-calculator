@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 concurrency:
@@ -26,6 +27,22 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      - name: Wait for uploaded site to become visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          for attempt in {1..12}; do
+            if count=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[] | select(.name == "github-pages" and .expired == false)] | length') && [ "$count" -eq 1 ]; then
+              echo "Site artifact is available for deployment."
+              exit 0
+            fi
+            echo "Waiting for GitHub to list the uploaded site (attempt $attempt/12)."
+            sleep 5
+          done
+          echo "::error::GitHub did not list the uploaded site within 60 seconds."
+          exit 1
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

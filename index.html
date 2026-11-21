@@ -16,7 +16,12 @@ const KEY='ece120-calculator-v1';let state={scores:{},drops:{hw:true,labs:true,d
 const key=(s,i,p)=>`${s.id}-${i}-${p}`;const fmt=n=>Number.isFinite(n)?n.toFixed(2)+'%':'—';
 function boundedScore(value,max){if(value===undefined||value===null||String(value).trim()==='')return '';const n=Number(value);return Number.isNaN(n)?'':String(Math.max(0,Math.min(max,n)))}
 specs.forEach(s=>s.items.forEach((item,i)=>item.parts.forEach((max,p)=>{const id=key(s,i,p);if(state.scores[id]!==undefined)state.scores[id]=boundedScore(state.scores[id],max)})));
-function syncScoreInput(el){const value=boundedScore(el.value,Number(el.max));if(!el.validity.badInput)el.value=value;state.scores[el.dataset.score]=value}
+function syncScoreInput(el){
+ const max=Number(el.max),value=boundedScore(el.value,max);
+ // Leave valid input untouched: assigning .value while typing "99." removes the decimal.
+ if(!el.validity.badInput&&el.value!==''&&(Number(el.value)<0||Number(el.value)>max))el.value=value;
+ state.scores[el.dataset.score]=value;
+}
 function calculate(s,st=state){let rows=s.items.map((item,i)=>{let earned=0,total=0,invalid=false;item.parts.forEach((max,p)=>{let v=st.scores[key(s,i,p)];if(v!==undefined&&v!==''){let n=Number(v);if(!Number.isFinite(n)||n<0){invalid=true;return}earned+=Math.max(0,Math.min(max,n));total+=max}});return {i,value:total?earned/total*100:null,invalid,protected:item.protected}});let entered=rows.filter(r=>r.value!==null&&!r.invalid),drop=[];if(st.drops[s.id])drop=entered.filter(r=>!r.protected).sort((a,b)=>a.value-b.value||a.i-b.i).slice(0,Math.min(s.drop||0,Math.max(0,entered.length-1))).map(r=>r.i);let kept=entered.filter(r=>!drop.includes(r.i));return {rows,drop,count:entered.length,avg:kept.length?kept.reduce((a,b)=>a+b.value,0)/kept.length:null}}
 function totals(st=state){let results=Object.fromEntries(specs.map(s=>[s.id,calculate(s,st)]));let active=specs.filter(s=>s.weight&&st.enabled[s.id]&&results[s.id].avg!==null);let weight=active.reduce((a,s)=>a+s.weight,0),points=active.reduce((a,s)=>a+results[s.id].avg*s.weight/100,0);let bonus=st.enabled.quizzes?results.quizzes.rows.reduce((a,r)=>a+(r.value===null||r.invalid?0:Math.min(100,r.value)/100*.2),0):0;return {results,weight,points,bonus,grade:weight?points/weight*100+bonus:null}}
 
